@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id       Int    @id @default(autoincrement())
+  nombre   String
+  usuario  String @unique
+  password String
+  rol      String @default("recepcionista")
+}
+
+model Servicio {
+  id          Int    @id @default(autoincrement())
+  nombre      String
+  precio      Float
+  duracionMin Int?
+  descripcion String?
+  citas       Cita[]
+}
+
+model Cliente {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  cedula      String?
+  edad        Int?
+  telefono    String?
+  alergias    String?
+  condiciones String?
+  notas       String?
+  deuda       Float    @default(0) // <-- NUEVO CAMPO DE CUENTA CORRIENTE
+  citas       Cita[]
+}
+
+model Cita {
+  id            Int      @id @default(autoincrement())
+  fecha         String   
+  hora          String   
+  tipo          String   
+  estado        String   @default("Pendiente") 
+  
+  clienteId     Int
+  cliente       Cliente  @relation(fields: [clienteId], references: [id])
+  
+  servicioId    Int
+  servicio      Servicio @relation(fields: [servicioId], references: [id])
+
+  sesionActual  Int?
+  totalSesiones Int?
+  extras        String?
+
+  // --- CAMPOS DE CAJA Y FINANZAS ---
+  metodoPago    String?  
+  montoPagado   Float?   
+}
