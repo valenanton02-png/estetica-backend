@@ -57,3 +57,18 @@ model Cita {
   metodoPago    String?  
   montoPagado   Float?   
 }
+model Inventario {
+  id            Int     @id @default(autoincrement())
+  nombre        String
+  cantidad      Float
+  unidad        String  // Ej: "potes", "ml", "unidades"
+  stockMinimo   Float   // Para que la app sepa cuándo avisarte
+}
+
+model Egreso {
+  id            Int     @id @default(autoincrement())
+  fecha         String
+  concepto      String
+  categoria     String
+  montoUSD      Float
+}
