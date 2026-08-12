@@ -388,3 +388,66 @@ const PUERTO = 3000;
 app.listen(PUERTO, () => {
   console.log(`Servidor corriendo en el puerto ${PUERTO}`);
 });
+// ==========================================
+// RUTAS PARA INVENTARIO
+// ==========================================
+app.get('/inventario', async (req, res) => {
+    try { const items = await prisma.inventario.findMany(); res.json(items); } 
+    catch (error) { res.status(500).json({ error: 'Error al obtener inventario' }); }
+});
+
+app.post('/inventario', async (req, res) => {
+    const { nombre, cantidad, unidad, stockMinimo } = req.body;
+    try {
+        const item = await prisma.inventario.create({
+            data: { nombre, cantidad: parseFloat(cantidad), unidad, stockMinimo: parseFloat(stockMinimo) }
+        });
+        res.json(item);
+    } catch (error) { res.status(500).json({ error: 'Error al crear item' }); }
+});
+
+app.patch('/inventario/:id', async (req, res) => {
+    const { id } = req.params;
+    const { cantidad } = req.body;
+    try {
+        const item = await prisma.inventario.update({
+            where: { id: parseInt(id) },
+            data: { cantidad: parseFloat(cantidad) }
+        });
+        res.json(item);
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar inventario' }); }
+});
+
+app.delete('/inventario/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await prisma.inventario.delete({ where: { id: parseInt(id) } });
+        res.json({ message: 'Item eliminado' });
+    } catch (error) { res.status(500).json({ error: 'Error al eliminar item' }); }
+});
+
+// ==========================================
+// RUTAS PARA EGRESOS (GASTOS)
+// ==========================================
+app.get('/egresos', async (req, res) => {
+    try { const egresos = await prisma.egreso.findMany(); res.json(egresos); } 
+    catch (error) { res.status(500).json({ error: 'Error al obtener egresos' }); }
+});
+
+app.post('/egresos', async (req, res) => {
+    const { fecha, concepto, categoria, montoUSD } = req.body;
+    try {
+        const egreso = await prisma.egreso.create({
+            data: { fecha, concepto, categoria, montoUSD: parseFloat(montoUSD) }
+        });
+        res.json(egreso);
+    } catch (error) { res.status(500).json({ error: 'Error al registrar egreso' }); }
+});
+
+app.delete('/egresos/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await prisma.egreso.delete({ where: { id: parseInt(id) } });
+        res.json({ message: 'Egreso eliminado' });
+    } catch (error) { res.status(500).json({ error: 'Error al eliminar egreso' }); }
+});
