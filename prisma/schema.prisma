@@ -72,3 +72,25 @@ model Egreso {
   categoria     String
   montoUSD      Float
 }
+// ==========================================
+// MÓDULO BOUTIQUE (PRODUCTOS DE VENTA)
+// ==========================================
+
+model ProductoBoutique {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  precio      Float    // Precio de venta al público
+  stock       Int      // Cantidad disponible para vender
+  ventas      VentaBoutique[]
+}
+
+model VentaBoutique {
+  id                 Int      @id @default(autoincrement())
+  fecha              String
+  productoId         Int
+  producto           ProductoBoutique @relation(fields: [productoId], references: [id])
+  cantidad           Int
+  totalPagado        Float
+  metodoPago         String
+}
