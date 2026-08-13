@@ -530,3 +530,53 @@ app.post('/ventas-boutique', async (req, res) => {
         res.json(nuevaVenta);
     } catch (error) { res.status(500).json({ error: 'Error al procesar la venta' }); }
 });
+// =======================================================
+// RUTAS PARA ARQUEO Y CUADRE DE CAJA
+// =======================================================
+
+// 1. Consultar si la caja de un día específico está abierta o cerrada
+app.get('/caja/:fecha', async (req, res) => {
+    const { fecha } = req.params;
+    try {
+        const caja = await prisma.cajaDiaria.findUnique({ where: { fecha } });
+        res.json(caja || { estado: 'No aperturada' });
+    } catch (error) { res.status(500).json({ error: 'Error al consultar la caja' }); }
+});
+
+// 2. Abrir la caja por la mañana
+app.post('/caja/abrir', async (req, res) => {
+    const { fecha, montoApertura } = req.body;
+    try {
+        const nuevaCaja = await prisma.cajaDiaria.create({
+            data: { fecha, montoApertura: parseFloat(montoApertura), estado: 'Abierta' }
+        });
+        res.json(nuevaCaja);
+    } catch (error) { res.status(500).json({ error: 'Error al abrir la caja. ¿Quizás ya está abierta hoy?' }); }
+});
+
+// 3. Cerrar la caja al final del día (El Cuadre)
+app.put('/caja/cerrar/:id', async (req, res) => {
+    const { id } = req.params;
+    const { ingresosCalculados, egresosCalculados, montoCierreFisico, diferencia } = req.body;
+    try {
+        const cajaCerrada = await prisma.cajaDiaria.update({
+            where: { id: parseInt(id) },
+            data: {
+                ingresosCalculados: parseFloat(ingresosCalculados),
+                egresosCalculados: parseFloat(egresosCalculados),
+                montoCierreFisico: parseFloat(montoCierreFisico),
+                diferencia: parseFloat(diferencia),
+                estado: 'Cerrada'
+            }
+        });
+        res.json(cajaCerrada);
+    } catch (error) { res.status(500).json({ error: 'Error al cerrar la caja' }); }
+});
+
+// 4. Obtener todo el historial de cajas (Para auditoría)
+app.get('/cajas/historial', async (req, res) => {
+    try {
+        const historial = await prisma.cajaDiaria.findMany({ orderBy: { fecha: 'desc' } });
+        res.json(historial);
+    } catch (error) { res.status(500).json({ error: 'Error al obtener historial de cajas' }); }
+});
