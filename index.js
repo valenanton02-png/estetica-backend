@@ -451,3 +451,82 @@ app.delete('/egresos/:id', async (req, res) => {
         res.json({ message: 'Egreso eliminado' });
     } catch (error) { res.status(500).json({ error: 'Error al eliminar egreso' }); }
 });
+// =======================================================
+// RUTAS PARA LA BOUTIQUE (PRODUCTOS DE VENTA AL PÚBLICO)
+// =======================================================
+
+// 1. Obtener catálogo de la tienda
+app.get('/boutique', async (req, res) => {
+    try { const productos = await prisma.productoBoutique.findMany(); res.json(productos); } 
+    catch (error) { res.status(500).json({ error: 'Error al obtener productos' }); }
+});
+
+// 2. Agregar un nuevo producto a la tienda
+app.post('/boutique', async (req, res) => {
+    const { nombre, descripcion, precio, stock } = req.body;
+    try {
+        const producto = await prisma.productoBoutique.create({
+            data: { nombre, descripcion, precio: parseFloat(precio), stock: parseInt(stock) }
+        });
+        res.json(producto);
+    } catch (error) { res.status(500).json({ error: 'Error al crear producto' }); }
+});
+
+// 3. Actualizar stock manualmente (si traen nueva mercancía)
+app.patch('/boutique/:id', async (req, res) => {
+    const { id } = req.params;
+    const { stock, precio } = req.body;
+    try {
+        const dataToUpdate = {};
+        if (stock !== undefined) dataToUpdate.stock = parseInt(stock);
+        if (precio !== undefined) dataToUpdate.precio = parseFloat(precio);
+        
+        const producto = await prisma.productoBoutique.update({
+            where: { id: parseInt(id) }, data: dataToUpdate
+        });
+        res.json(producto);
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar producto' }); }
+});
+
+// 4. Eliminar producto
+app.delete('/boutique/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        // Primero borrar las ventas asociadas para que la BD no dé error de integridad
+        await prisma.ventaBoutique.deleteMany({ where: { productoId: parseInt(id) } });
+        await prisma.productoBoutique.delete({ where: { id: parseInt(id) } });
+        res.json({ message: 'Producto eliminado' });
+    } catch (error) { res.status(500).json({ error: 'Error al eliminar producto' }); }
+});
+
+// 5. Obtener historial de ventas de la tienda
+app.get('/ventas-boutique', async (req, res) => {
+    try {
+        const ventas = await prisma.ventaBoutique.findMany({ include: { producto: true } });
+        res.json(ventas);
+    } catch (error) { res.status(500).json({ error: 'Error al obtener ventas' }); }
+});
+
+// 6. Registrar una venta (Resta del stock automáticamente)
+app.post('/ventas-boutique', async (req, res) => {
+    const { fecha, productoId, cantidad, totalPagado, metodoPago } = req.body;
+    try {
+        const nuevaVenta = await prisma.ventaBoutique.create({
+            data: {
+                fecha, 
+                productoId: parseInt(productoId), 
+                cantidad: parseInt(cantidad), 
+                totalPagado: parseFloat(totalPagado), 
+                metodoPago
+            }
+        });
+        
+        // Magia: Restar el stock automáticamente
+        await prisma.productoBoutique.update({
+            where: { id: parseInt(productoId) },
+            data: { stock: { decrement: parseInt(cantidad) } }
+        });
+
+        res.json(nuevaVenta);
+    } catch (error) { res.status(500).json({ error: 'Error al procesar la venta' }); }
+});
