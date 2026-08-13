@@ -94,3 +94,16 @@ model VentaBoutique {
   totalPagado        Float
   metodoPago         String
 }
+// ==========================================
+// MÓDULO ARQUEO DE CAJA (CUADRE DIARIO)
+// ==========================================
+model CajaDiaria {
+  id                  Int      @id @default(autoincrement())
+  fecha               String   @unique
+  montoApertura       Float    // Dinero base en físico al abrir el local
+  ingresosCalculados  Float?   // Lo que el sistema sumó en el día
+  egresosCalculados   Float?   // Lo que se gastó en el día
+  montoCierreFisico   Float?   // El billete real contado con las manos al irse
+  diferencia          Float?   // Sobrante (+) o Faltante (-)
+  estado              String   @default("Abierta") // "Abierta" o "Cerrada"
+}
