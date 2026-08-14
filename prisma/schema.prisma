@@ -29,11 +29,11 @@ model Cliente {
   nombre             String
   cedula             String   @unique
   telefono           String?
-  fechaNacimiento    String
-  edad               Int?     // Recuperado para que no se borre
-  alergias           String?  // Recuperado para que no se borre
-  condiciones        String?  // Recuperado para que no se borre
-  notas              String?  // Recuperado para que no se borre
+  edad               Int?
+  alergias           String?
+  condiciones        String?
+  notas              String?
+  fechaNacimiento    String?  // <--- ¡El signo de interrogación "?" arregla el error!
   deuda              Float    @default(0)
   saldoFavor         Float    @default(0)
   descuentoFijo      Int      @default(0)       
