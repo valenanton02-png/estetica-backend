@@ -15,12 +15,13 @@ model Usuario {
 }
 
 model Servicio {
-  id          Int    @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   nombre      String
   precio      Float
-  duracionMin Int?
+  duracionMin Int
   descripcion String?
   citas       Cita[]
+  paquetes    PaquetePaciente[] // <--- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
 }
 
 model Cliente {
