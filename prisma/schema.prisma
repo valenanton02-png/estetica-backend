@@ -24,18 +24,17 @@ model Servicio {
 }
 
 model Cliente {
-  id          Int      @id @default(autoincrement())
-  nombre      String
-  cedula      String?
-  edad        Int?
-  telefono    String?
-  alergias    String?
-  condiciones String?
-  notas       String?
-  deuda       Float    @default(0) // <-- NUEVO CAMPO DE CUENTA CORRIENTE
-  citas       Cita[]
+  id                 Int      @id @default(autoincrement())
+  nombre             String
+  cedula             String   @unique
+  telefono           String?
+  fechaNacimiento    String?
+  deuda              Float    @default(0)
+  saldoFavor         Float    @default(0)       // Por si dejan un abono suelto
+  descuentoFijo      Int      @default(0)       // NUEVO: % de descuento (Ej. 20, 50, 100) para patrocinados
+  citas              Cita[]
+  paquetesActivos    PaquetePaciente[]          // NUEVO: Sus acumuladores de sesiones
 }
-
 model Cita {
   id            Int      @id @default(autoincrement())
   fecha         String   
