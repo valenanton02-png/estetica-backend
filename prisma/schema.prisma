@@ -106,3 +106,19 @@ model CajaDiaria {
   diferencia          Float?   // Sobrante (+) o Faltante (-)
   estado              String   @default("Abierta") // "Abierta" o "Cerrada"
 }
+// ==========================================
+// MÓDULO PAQUETES FLEXIBLES (ACUMULADORES)
+// ==========================================
+model PaquetePaciente {
+  id                Int      @id @default(autoincrement())
+  fechaCompra       String
+  clienteId         Int
+  cliente           Cliente  @relation(fields: [clienteId], references: [id])
+  servicioId        Int
+  servicio          Servicio @relation(fields: [servicioId], references: [id])
+  totalSesiones     Int      // Ej. 10 sesiones
+  sesionesUsadas    Int      @default(0) // Contador que irá subiendo
+  precioTotal       Float    // Cuánto costó el paquete completo
+  estadoPago        String   // "Pagado" o "Por Pagar" (El acumulador)
+  estadoPaquete     String   @default("Activo") // "Activo" o "Completado"
+}
