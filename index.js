@@ -580,3 +580,72 @@ app.get('/cajas/historial', async (req, res) => {
         res.json(historial);
     } catch (error) { res.status(500).json({ error: 'Error al obtener historial de cajas' }); }
 });
+// =======================================================
+// RUTAS DE PAQUETES FLEXIBLES Y DESCUENTOS
+// =======================================================
+
+// 1. Asignarle un porcentaje de descuento fijo a un paciente (Patrocinios)
+app.patch('/clientes/:id/descuento', async (req, res) => {
+    const { id } = req.params;
+    const { descuentoFijo } = req.body;
+    try {
+        const clienteActualizado = await prisma.cliente.update({
+            where: { id: parseInt(id) },
+            data: { descuentoFijo: parseInt(descuentoFijo) }
+        });
+        res.json(clienteActualizado);
+    } catch (error) { res.status(500).json({ error: 'Error al actualizar descuento' }); }
+});
+
+// 2. Crear un nuevo paquete/acumulador para un paciente
+app.post('/paquetes', async (req, res) => {
+    const { fechaCompra, clienteId, servicioId, totalSesiones, precioTotal, estadoPago } = req.body;
+    try {
+        const nuevoPaquete = await prisma.paquetePaciente.create({
+            data: {
+                fechaCompra,
+                clienteId: parseInt(clienteId),
+                servicioId: parseInt(servicioId),
+                totalSesiones: parseInt(totalSesiones),
+                precioTotal: parseFloat(precioTotal),
+                estadoPago, // "Pagado" o "Por Pagar"
+                estadoPaquete: "Activo"
+            }
+        });
+        res.json(nuevoPaquete);
+    } catch (error) { res.status(500).json({ error: 'Error al crear el paquete' }); }
+});
+
+// 3. Ver los paquetes activos de un cliente específico
+app.get('/paquetes/cliente/:clienteId', async (req, res) => {
+    const { clienteId } = req.params;
+    try {
+        const paquetes = await prisma.paquetePaciente.findMany({
+            where: { clienteId: parseInt(clienteId) },
+            include: { servicio: true }
+        });
+        res.json(paquetes);
+    } catch (error) { res.status(500).json({ error: 'Error al obtener paquetes' }); }
+});
+
+// 4. Consumir (descontar) una sesión de un paquete activo
+app.put('/paquetes/usar/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const paquete = await prisma.paquetePaciente.findUnique({ where: { id: parseInt(id) } });
+        
+        if (!paquete || paquete.estadoPaquete === 'Completado') {
+            return res.status(400).json({ error: 'El paquete ya está completado o no existe' });
+        }
+
+        const nuevasSesionesUsadas = paquete.sesionesUsadas + 1;
+        const nuevoEstado = nuevasSesionesUsadas >= paquete.totalSesiones ? 'Completado' : 'Activo';
+
+        const paqueteActualizado = await prisma.paquetePaciente.update({
+            where: { id: parseInt(id) },
+            data: { sesionesUsadas: nuevasSesionesUsadas, estadoPaquete: nuevoEstado }
+        });
+
+        res.json(paqueteActualizado);
+    } catch (error) { res.status(500).json({ error: 'Error al descontar sesión' }); }
+});
