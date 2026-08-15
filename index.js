@@ -659,3 +659,19 @@ app.put('/paquetes/pagar/:id', async (req, res) => {
         res.json(paqueteActualizado);
     } catch (error) { res.status(500).json({ error: 'Error al registrar el pago del paquete' }); }
 });
+// ==========================================
+// ABONAR A LA DEUDA DE UN CLIENTE
+// ==========================================
+app.put('/clientes/:id/abonar', async (req, res) => {
+    const { montoAbono } = req.body;
+    try {
+        const cliente = await prisma.cliente.findUnique({ where: { id: parseInt(req.params.id) } });
+        // Le resta el dinero, pero se asegura de que la deuda no baje de 0
+        const nuevaDeuda = Math.max(0, cliente.deuda - parseFloat(montoAbono)); 
+        const actualizado = await prisma.cliente.update({
+            where: { id: parseInt(req.params.id) },
+            data: { deuda: nuevaDeuda }
+        });
+        res.json(actualizado);
+    } catch (error) { res.status(500).json({ error: 'Error al descontar deuda' }); }
+});
