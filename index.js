@@ -649,3 +649,13 @@ app.put('/paquetes/usar/:id', async (req, res) => {
         res.json(paqueteActualizado);
     } catch (error) { res.status(500).json({ error: 'Error al descontar sesión' }); }
 });
+// 5. Marcar un paquete "Por Pagar" como "Pagado" definitivamente
+app.put('/paquetes/pagar/:id', async (req, res) => {
+    try {
+        const paqueteActualizado = await prisma.paquetePaciente.update({
+            where: { id: parseInt(req.params.id) },
+            data: { estadoPago: 'Pagado' }
+        });
+        res.json(paqueteActualizado);
+    } catch (error) { res.status(500).json({ error: 'Error al registrar el pago del paquete' }); }
+});
