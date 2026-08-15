@@ -127,3 +127,11 @@ model PaquetePaciente {
   estadoPago        String   // "Pagado" o "Por Pagar" (El acumulador)
   estadoPaquete     String   @default("Activo") // "Activo" o "Completado"
 }
+model IngresoExtra {
+  id          Int      @id @default(autoincrement())
+  concepto    String
+  monto       Float
+  metodoPago  String
+  fecha       String
+  hora        String?
+}
