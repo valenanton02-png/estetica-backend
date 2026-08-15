@@ -666,7 +666,6 @@ app.put('/clientes/:id/abonar', async (req, res) => {
     const { montoAbono } = req.body;
     try {
         const cliente = await prisma.cliente.findUnique({ where: { id: parseInt(req.params.id) } });
-        // Le resta el dinero, pero se asegura de que la deuda no baje de 0
         const nuevaDeuda = Math.max(0, cliente.deuda - parseFloat(montoAbono)); 
         const actualizado = await prisma.cliente.update({
             where: { id: parseInt(req.params.id) },
@@ -674,4 +673,24 @@ app.put('/clientes/:id/abonar', async (req, res) => {
         });
         res.json(actualizado);
     } catch (error) { res.status(500).json({ error: 'Error al descontar deuda' }); }
+});
+
+// ==========================================
+// RUTAS DE INGRESOS EXTRAS (DIRECTOS A CAJA)
+// ==========================================
+app.get('/ingresos-extras', async (req, res) => {
+    try {
+        const ingresos = await prisma.ingresoExtra.findMany();
+        res.json(ingresos);
+    } catch (error) { res.status(500).json({ error: 'Error al obtener ingresos' }); }
+});
+
+app.post('/ingresos-extras', async (req, res) => {
+    const { concepto, monto, metodoPago, fecha, hora } = req.body;
+    try {
+        const nuevoIngreso = await prisma.ingresoExtra.create({
+            data: { concepto, monto: parseFloat(monto), metodoPago, fecha, hora }
+        });
+        res.json(nuevoIngreso);
+    } catch (error) { res.status(500).json({ error: 'Error al registrar ingreso' }); }
 });
