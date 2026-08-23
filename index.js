@@ -135,6 +135,7 @@ app.get('/clientes', async (req, res) => {
     res.status(500).json({ error: "Fallo al obtener clientas" });
   }
 });
+
 // ELIMINAR a una clienta (Y limpiar su historial de citas)
 app.delete('/clientes/:id', async (req, res) => {
   try {
@@ -156,6 +157,7 @@ app.delete('/clientes/:id', async (req, res) => {
     res.status(500).json({ error: "Fallo al eliminar el registro" });
   }
 });
+
 // OBTENER el historial de citas de una clienta específica
 app.get('/clientes/:id/citas', async (req, res) => {
   try {
@@ -170,23 +172,26 @@ app.get('/clientes/:id/citas', async (req, res) => {
     res.status(500).json({ error: "Error al obtener el historial de citas" });
   }
 });
+
 // --- RUTAS DE CITAS ---
 
-// AGENDAR una nueva cita (Actualizado con Paquetes)
+// AGENDAR una nueva cita (Actualizado con Precios Exactos y Extras)
 app.post('/citas', async (req, res) => {
   try {
-    const { fecha, hora, tipo, clienteId, servicioId, sesionActual, totalSesiones, extras } = req.body;
+    const { clienteId, servicioId, fecha, hora, tipo, sesionActual, totalSesiones, extras, cargoSesion } = req.body;
     
     const nuevaCita = await prisma.cita.create({
       data: {
-        fecha: fecha,
-        hora: hora,
-        tipo: tipo || "unica",
         clienteId: parseInt(clienteId),
         servicioId: parseInt(servicioId),
+        fecha: fecha,
+        hora: hora,
+        estado: 'Pendiente',
+        tipo: tipo || "unica",
         sesionActual: sesionActual ? parseInt(sesionActual) : null,
         totalSesiones: totalSesiones ? parseInt(totalSesiones) : null,
-        extras: extras || null
+        extras: extras || null,
+        cargoSesion: cargoSesion ? parseFloat(cargoSesion) : null
       }
     });
     
@@ -240,7 +245,7 @@ app.put('/citas/:id/estado', async (req, res) => {
       // 4. Guardamos el pago en el registro de la cita
       const citaActualizada = await prisma.cita.update({
         where: { id: idCita },
-        data: { estado: estado, metodoPago: metodoPago, montoPagado: abono }
+        data: { estado: estado, metodoPago: metodoPago, montoPagado: abono, cargoSesion: cargo }
       });
       
       res.json(citaActualizada);
@@ -312,6 +317,7 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ error: "Error en el servidor al intentar acceder" });
   }
 });
+
 // ACTUALIZAR un servicio (Catálogo)
 app.put('/servicios/:id', async (req, res) => {
   try {
@@ -341,6 +347,7 @@ app.put('/clientes/:id', async (req, res) => {
     res.status(500).json({ error: "Fallo al actualizar la clienta" });
   }
 });
+
 // --- RUTAS DE GESTIÓN DE USUARIOS ---
 
 // OBTENER todos los usuarios (ocultando las contraseñas por seguridad)
@@ -388,6 +395,7 @@ const PUERTO = 3000;
 app.listen(PUERTO, () => {
   console.log(`Servidor corriendo en el puerto ${PUERTO}`);
 });
+
 // ==========================================
 // RUTAS PARA INVENTARIO
 // ==========================================
@@ -451,17 +459,15 @@ app.delete('/egresos/:id', async (req, res) => {
         res.json({ message: 'Egreso eliminado' });
     } catch (error) { res.status(500).json({ error: 'Error al eliminar egreso' }); }
 });
+
 // =======================================================
 // RUTAS PARA LA BOUTIQUE (PRODUCTOS DE VENTA AL PÚBLICO)
 // =======================================================
-
-// 1. Obtener catálogo de la tienda
 app.get('/boutique', async (req, res) => {
     try { const productos = await prisma.productoBoutique.findMany(); res.json(productos); } 
     catch (error) { res.status(500).json({ error: 'Error al obtener productos' }); }
 });
 
-// 2. Agregar un nuevo producto a la tienda
 app.post('/boutique', async (req, res) => {
     const { nombre, descripcion, precio, stock } = req.body;
     try {
@@ -472,7 +478,6 @@ app.post('/boutique', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al crear producto' }); }
 });
 
-// 3. Actualizar stock manualmente (si traen nueva mercancía)
 app.patch('/boutique/:id', async (req, res) => {
     const { id } = req.params;
     const { stock, precio } = req.body;
@@ -488,18 +493,15 @@ app.patch('/boutique/:id', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al actualizar producto' }); }
 });
 
-// 4. Eliminar producto
 app.delete('/boutique/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        // Primero borrar las ventas asociadas para que la BD no dé error de integridad
         await prisma.ventaBoutique.deleteMany({ where: { productoId: parseInt(id) } });
         await prisma.productoBoutique.delete({ where: { id: parseInt(id) } });
         res.json({ message: 'Producto eliminado' });
     } catch (error) { res.status(500).json({ error: 'Error al eliminar producto' }); }
 });
 
-// 5. Obtener historial de ventas de la tienda
 app.get('/ventas-boutique', async (req, res) => {
     try {
         const ventas = await prisma.ventaBoutique.findMany({ include: { producto: true } });
@@ -507,7 +509,6 @@ app.get('/ventas-boutique', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al obtener ventas' }); }
 });
 
-// 6. Registrar una venta (Resta del stock automáticamente)
 app.post('/ventas-boutique', async (req, res) => {
     const { fecha, productoId, cantidad, totalPagado, metodoPago } = req.body;
     try {
@@ -521,7 +522,6 @@ app.post('/ventas-boutique', async (req, res) => {
             }
         });
         
-        // Magia: Restar el stock automáticamente
         await prisma.productoBoutique.update({
             where: { id: parseInt(productoId) },
             data: { stock: { decrement: parseInt(cantidad) } }
@@ -530,11 +530,10 @@ app.post('/ventas-boutique', async (req, res) => {
         res.json(nuevaVenta);
     } catch (error) { res.status(500).json({ error: 'Error al procesar la venta' }); }
 });
+
 // =======================================================
 // RUTAS PARA ARQUEO Y CUADRE DE CAJA
 // =======================================================
-
-// 1. Consultar si la caja de un día específico está abierta o cerrada
 app.get('/caja/:fecha', async (req, res) => {
     const { fecha } = req.params;
     try {
@@ -543,7 +542,6 @@ app.get('/caja/:fecha', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al consultar la caja' }); }
 });
 
-// 2. Abrir la caja por la mañana
 app.post('/caja/abrir', async (req, res) => {
     const { fecha, montoApertura } = req.body;
     try {
@@ -554,7 +552,6 @@ app.post('/caja/abrir', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al abrir la caja. ¿Quizás ya está abierta hoy?' }); }
 });
 
-// 3. Cerrar la caja al final del día (El Cuadre)
 app.put('/caja/cerrar/:id', async (req, res) => {
     const { id } = req.params;
     const { ingresosCalculados, egresosCalculados, montoCierreFisico, diferencia } = req.body;
@@ -573,18 +570,16 @@ app.put('/caja/cerrar/:id', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al cerrar la caja' }); }
 });
 
-// 4. Obtener todo el historial de cajas (Para auditoría)
 app.get('/cajas/historial', async (req, res) => {
     try {
         const historial = await prisma.cajaDiaria.findMany({ orderBy: { fecha: 'desc' } });
         res.json(historial);
     } catch (error) { res.status(500).json({ error: 'Error al obtener historial de cajas' }); }
 });
+
 // =======================================================
 // RUTAS DE PAQUETES FLEXIBLES Y DESCUENTOS
 // =======================================================
-
-// 1. Asignarle un porcentaje de descuento fijo a un paciente (Patrocinios)
 app.patch('/clientes/:id/descuento', async (req, res) => {
     const { id } = req.params;
     const { descuentoFijo } = req.body;
@@ -597,7 +592,6 @@ app.patch('/clientes/:id/descuento', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al actualizar descuento' }); }
 });
 
-// 2. Crear un nuevo paquete/acumulador para un paciente
 app.post('/paquetes', async (req, res) => {
     const { fechaCompra, clienteId, servicioId, totalSesiones, precioTotal, estadoPago } = req.body;
     try {
@@ -616,7 +610,6 @@ app.post('/paquetes', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al crear el paquete' }); }
 });
 
-// 3. Ver los paquetes activos de un cliente específico
 app.get('/paquetes/cliente/:clienteId', async (req, res) => {
     const { clienteId } = req.params;
     try {
@@ -628,7 +621,6 @@ app.get('/paquetes/cliente/:clienteId', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al obtener paquetes' }); }
 });
 
-// 4. Consumir (descontar) una sesión de un paquete activo
 app.put('/paquetes/usar/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -649,7 +641,7 @@ app.put('/paquetes/usar/:id', async (req, res) => {
         res.json(paqueteActualizado);
     } catch (error) { res.status(500).json({ error: 'Error al descontar sesión' }); }
 });
-// 5. Marcar un paquete "Por Pagar" como "Pagado" definitivamente
+
 app.put('/paquetes/pagar/:id', async (req, res) => {
     try {
         const paqueteActualizado = await prisma.paquetePaciente.update({
@@ -659,6 +651,7 @@ app.put('/paquetes/pagar/:id', async (req, res) => {
         res.json(paqueteActualizado);
     } catch (error) { res.status(500).json({ error: 'Error al registrar el pago del paquete' }); }
 });
+
 // ==========================================
 // ABONAR A LA DEUDA DE UN CLIENTE
 // ==========================================
