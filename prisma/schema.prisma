@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Usuario {
@@ -15,31 +16,28 @@ model Usuario {
 }
 
 model Servicio {
-  id          Int      @id @default(autoincrement())
+  id          Int               @id @default(autoincrement())
   nombre      String
   precio      Float
-  duracionMin Int
+  duracionMin Int?
   descripcion String?
   citas       Cita[]
-  paquetes    PaquetePaciente[] // <--- ESTA ES LA LÍNEA MÁGICA QUE FALTABA
+  paquetes    PaquetePaciente[] // <--- LÍNEA CORREGIDA PARA EL ERROR
 }
 
 model Cliente {
-  id                 Int      @id @default(autoincrement())
-  nombre             String
-  cedula             String   @unique
-  telefono           String?
-  edad               Int?
-  alergias           String?
-  condiciones        String?
-  notas              String?
-  fechaNacimiento    String?  // <--- ¡El signo de interrogación "?" arregla el error!
-  deuda              Float    @default(0)
-  saldoFavor         Float    @default(0)
-  descuentoFijo      Int      @default(0)       
-  citas              Cita[]
-  paquetesActivos    PaquetePaciente[]          
+  id              Int               @id @default(autoincrement())
+  nombre          String
+  cedula          String            @unique
+  telefono        String?
+  fechaNacimiento String?
+  deuda           Float             @default(0)
+  saldoFavor      Float             @default(0)       
+  descuentoFijo   Int               @default(0)       
+  citas           Cita[]
+  paquetesActivos PaquetePaciente[]          
 }
+
 model Cita {
   id            Int      @id @default(autoincrement())
   fecha         String
@@ -49,7 +47,7 @@ model Cita {
   sesionActual  Int?
   totalSesiones Int?
   extras        String?
-  cargoSesion   Float?   // <--- ¡ESTA ES LA LÍNEA QUE TE DEBE ESTAR FALTANDO!
+  cargoSesion   Float?   // <--- CAMBIO PARA LAS CITAS CON EXTRAS
 
   metodoPago    String?
   montoPagado   Float?
@@ -60,81 +58,87 @@ model Cita {
   servicio      Servicio @relation(fields: [servicioId], references: [id])
 }
 
-  // --- CAMPOS DE CAJA Y FINANZAS ---
-  metodoPago    String?  
-  montoPagado   Float?   
-}
 model Inventario {
-  id            Int     @id @default(autoincrement())
-  nombre        String
-  cantidad      Float
-  unidad        String  // Ej: "potes", "ml", "unidades"
-  stockMinimo   Float   // Para que la app sepa cuándo avisarte
+  id          Int    @id @default(autoincrement())
+  nombre      String
+  cantidad    Float
+  unidad      String  
+  stockMinimo Float   
 }
 
 model Egreso {
-  id            Int     @id @default(autoincrement())
-  fecha         String
-  concepto      String
-  categoria     String
-  montoUSD      Float
+  id        Int    @id @default(autoincrement())
+  fecha     String
+  concepto  String
+  categoria String
+  montoUSD  Float
 }
+
 // ==========================================
 // MÓDULO BOUTIQUE (PRODUCTOS DE VENTA)
 // ==========================================
 
 model ProductoBoutique {
-  id          Int      @id @default(autoincrement())
+  id          Int             @id @default(autoincrement())
   nombre      String
   descripcion String?
-  precio      Float    // Precio de venta al público
-  stock       Int      // Cantidad disponible para vender
+  precio      Float    
+  stock       Int      
   ventas      VentaBoutique[]
 }
 
 model VentaBoutique {
-  id                 Int      @id @default(autoincrement())
-  fecha              String
-  productoId         Int
-  producto           ProductoBoutique @relation(fields: [productoId], references: [id])
-  cantidad           Int
-  totalPagado        Float
-  metodoPago         String
+  id          Int              @id @default(autoincrement())
+  fecha       String
+  productoId  Int
+  producto    ProductoBoutique @relation(fields: [productoId], references: [id])
+  cantidad    Int
+  totalPagado Float
+  metodoPago  String
 }
+
 // ==========================================
 // MÓDULO ARQUEO DE CAJA (CUADRE DIARIO)
 // ==========================================
+
 model CajaDiaria {
-  id                  Int      @id @default(autoincrement())
-  fecha               String   @unique
-  montoApertura       Float    // Dinero base en físico al abrir el local
-  ingresosCalculados  Float?   // Lo que el sistema sumó en el día
-  egresosCalculados   Float?   // Lo que se gastó en el día
-  montoCierreFisico   Float?   // El billete real contado con las manos al irse
-  diferencia          Float?   // Sobrante (+) o Faltante (-)
-  estado              String   @default("Abierta") // "Abierta" o "Cerrada"
+  id                 Int      @id @default(autoincrement())
+  fecha              String   @unique
+  montoApertura      Float    
+  ingresosCalculados Float?   
+  egresosCalculados  Float?   
+  montoCierreFisico  Float?   
+  diferencia         Float?   
+  estado             String   @default("Abierta") 
 }
+
 // ==========================================
 // MÓDULO PAQUETES FLEXIBLES (ACUMULADORES)
 // ==========================================
+
 model PaquetePaciente {
-  id                Int      @id @default(autoincrement())
-  fechaCompra       String
-  clienteId         Int
-  cliente           Cliente  @relation(fields: [clienteId], references: [id])
-  servicioId        Int
-  servicio          Servicio @relation(fields: [servicioId], references: [id])
-  totalSesiones     Int      // Ej. 10 sesiones
-  sesionesUsadas    Int      @default(0) // Contador que irá subiendo
-  precioTotal       Float    // Cuánto costó el paquete completo
-  estadoPago        String   // "Pagado" o "Por Pagar" (El acumulador)
-  estadoPaquete     String   @default("Activo") // "Activo" o "Completado"
+  id             Int      @id @default(autoincrement())
+  fechaCompra    String
+  clienteId      Int
+  cliente        Cliente  @relation(fields: [clienteId], references: [id])
+  servicioId     Int
+  servicio       Servicio @relation(fields: [servicioId], references: [id])
+  totalSesiones  Int      
+  sesionesUsadas Int      @default(0) 
+  precioTotal    Float    
+  estadoPago     String   
+  estadoPaquete  String   @default("Activo") 
 }
+
+// ==========================================
+// MÓDULO INGRESOS EXTRAS (NUEVO)
+// ==========================================
+
 model IngresoExtra {
-  id          Int      @id @default(autoincrement())
-  concepto    String
-  monto       Float
-  metodoPago  String
-  fecha       String
-  hora        String?
+  id         Int     @id @default(autoincrement())
+  concepto   String
+  monto      Float
+  metodoPago String
+  fecha      String
+  hora       String?
 }
