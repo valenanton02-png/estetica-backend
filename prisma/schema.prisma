@@ -42,20 +42,23 @@ model Cliente {
 }
 model Cita {
   id            Int      @id @default(autoincrement())
-  fecha         String   
-  hora          String   
-  tipo          String   
-  estado        String   @default("Pendiente") 
-  
-  clienteId     Int
-  cliente       Cliente  @relation(fields: [clienteId], references: [id])
-  
-  servicioId    Int
-  servicio      Servicio @relation(fields: [servicioId], references: [id])
-
+  fecha         String
+  hora          String?
+  estado        String   @default("Pendiente")
+  tipo          String   @default("unica")
   sesionActual  Int?
   totalSesiones Int?
   extras        String?
+  cargoSesion   Float?   // <--- ¡ESTA ES LA LÍNEA QUE TE DEBE ESTAR FALTANDO!
+
+  metodoPago    String?
+  montoPagado   Float?
+
+  clienteId     Int
+  cliente       Cliente  @relation(fields: [clienteId], references: [id])
+  servicioId    Int
+  servicio      Servicio @relation(fields: [servicioId], references: [id])
+}
 
   // --- CAMPOS DE CAJA Y FINANZAS ---
   metodoPago    String?  
