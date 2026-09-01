@@ -5,6 +5,7 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
 model Usuario {
   id       Int    @id @default(autoincrement())
   nombre   String
@@ -20,7 +21,7 @@ model Servicio {
   duracionMin Int?
   descripcion String?
   citas       Cita[]
-  paquetes    PaquetePaciente[] // <--- LÍNEA CORREGIDA PARA EL ERROR
+  paquetes    PaquetePaciente[] 
 }
 
 model Cliente {
@@ -29,6 +30,10 @@ model Cliente {
   cedula          String            @unique
   telefono        String?
   fechaNacimiento String?
+  edad            Int?              // <--- AÑADIDO: Edad de la paciente
+  alergias        String?           // <--- AÑADIDO: Alergias
+  condiciones     String?           // <--- AÑADIDO: Condiciones médicas
+  notas           String?           // <--- AÑADIDO: Notas clínicas
   deuda           Float             @default(0)
   saldoFavor      Float             @default(0)       
   descuentoFijo   Int               @default(0)       
@@ -45,7 +50,7 @@ model Cita {
   sesionActual  Int?
   totalSesiones Int?
   extras        String?
-  cargoSesion   Float?   // <--- CAMBIO PARA LAS CITAS CON EXTRAS
+  cargoSesion   Float?   
 
   metodoPago    String?
   montoPagado   Float?
