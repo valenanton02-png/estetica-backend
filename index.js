@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => {
-  res.send('¡El servidor de la estética está funcionando perfecto!');
+  res.send('¡El servidor de la estética está funcionando perfecto y optimizado!');
 });
 
 // --- RUTAS DE SERVICIOS ---
@@ -33,12 +33,7 @@ app.post('/servicios', async (req, res) => {
   try {
     const { nombre, precio, descripcion, duracion } = req.body;
     const nuevoServicio = await prisma.servicio.create({
-      data: {
-        nombre,
-        precio: parseFloat(precio) || 0,
-        duracionMin: parseInt(duracion) || 45,
-        descripcion
-      }
+      data: { nombre, precio: parseFloat(precio) || 0, duracionMin: parseInt(duracion) || 45, descripcion }
     });
     res.json(nuevoServicio);
   } catch (error) {
@@ -129,7 +124,7 @@ app.delete('/clientes/:id', async (req, res) => {
   try {
     const idCliente = parseInt(req.params.id);
     await prisma.cita.deleteMany({ where: { clienteId: idCliente } });
-    await prisma.paquetePaciente.deleteMany({ where: { clienteId: idCliente } }); // Arreglado para evitar choques
+    await prisma.paquetePaciente.deleteMany({ where: { clienteId: idCliente } }); 
     await prisma.cliente.delete({ where: { id: idCliente } });
     res.json({ mensaje: "Paciente eliminada" });
   } catch (error) {
@@ -201,7 +196,6 @@ app.post('/citas', async (req, res) => {
     });
     res.json(nuevaCita);
   } catch (error) {
-    // ESTE ES EL ESCUDO: Si Prisma falla, te dirá el error exacto en pantalla.
     console.error("❌ Error de Prisma al agendar:", error.message);
     res.status(500).json({ error: `Rechazado por Base de Datos: ${error.message}` });
   }
@@ -231,6 +225,38 @@ app.put('/citas/:id/estado', async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ error: "Fallo al procesar el pago" });
+  }
+});
+
+// 🔥 RUTA INTELIGENTE PARA REAGENDAR CITAS Y PAQUETES EN MASA 🔥
+app.put('/citas/:id/reagendar', async (req, res) => {
+  try {
+    const idCita = parseInt(req.params.id);
+    const { fecha, hora, cambiarRestantes } = req.body;
+    
+    // 1. Actualiza la cita seleccionada
+    const citaActualizada = await prisma.cita.update({
+      where: { id: idCita },
+      data: { fecha, hora }
+    });
+
+    // 2. Si es un paquete y marcaron la casilla, cambia la hora al resto
+    if (cambiarRestantes && citaActualizada.tipo === 'paquete') {
+      await prisma.cita.updateMany({
+        where: { 
+            clienteId: citaActualizada.clienteId, 
+            servicioId: citaActualizada.servicioId, 
+            tipo: 'paquete', 
+            estado: 'Pendiente',
+            id: { not: idCita } 
+        },
+        data: { hora: hora } 
+      });
+    }
+    
+    res.json(citaActualizada);
+  } catch (error) { 
+    res.status(500).json({ error: "Fallo al reagendar" }); 
   }
 });
 
@@ -295,115 +321,45 @@ app.post('/ingresos-extras', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al registrar ingreso' }); }
 });
 
-// --- BOUTIQUE ---
-app.get('/boutique', async (req, res) => {
-    try { res.json(await prisma.productoBoutique.findMany()); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.post('/boutique', async (req, res) => {
-    try {
-        const { nombre, descripcion, precio, stock } = req.body;
-        const producto = await prisma.productoBoutique.create({ data: { nombre, descripcion, precio: parseFloat(precio), stock: parseInt(stock) } });
-        res.json(producto);
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.patch('/boutique/:id', async (req, res) => {
-    try {
-        const { stock, precio } = req.body;
-        const dataToUpdate = {};
-        if (stock !== undefined) dataToUpdate.stock = parseInt(stock);
-        if (precio !== undefined) dataToUpdate.precio = parseFloat(precio);
-        const producto = await prisma.productoBoutique.update({ where: { id: parseInt(req.params.id) }, data: dataToUpdate });
-        res.json(producto);
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.delete('/boutique/:id', async (req, res) => {
-    try {
-        await prisma.ventaBoutique.deleteMany({ where: { productoId: parseInt(req.params.id) } });
-        await prisma.productoBoutique.delete({ where: { id: parseInt(req.params.id) } });
-        res.json({ message: 'Eliminado' });
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.get('/ventas-boutique', async (req, res) => {
-    try { res.json(await prisma.ventaBoutique.findMany({ include: { producto: true } })); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-app.post('/ventas-boutique', async (req, res) => {
-    try {
-        const { fecha, productoId, cantidad, totalPagado, metodoPago } = req.body;
-        const nuevaVenta = await prisma.ventaBoutique.create({
-            data: { fecha, productoId: parseInt(productoId), cantidad: parseInt(cantidad), totalPagado: parseFloat(totalPagado), metodoPago }
-        });
-        await prisma.productoBoutique.update({ where: { id: parseInt(productoId) }, data: { stock: { decrement: parseInt(cantidad) } } });
-        res.json(nuevaVenta);
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-// --- INVENTARIO ---
-app.get('/inventario', async (req, res) => {
-    try { res.json(await prisma.inventario.findMany()); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-app.post('/inventario', async (req, res) => {
-    try {
-        const { nombre, cantidad, unidad, stockMinimo } = req.body;
-        const item = await prisma.inventario.create({ data: { nombre, cantidad: parseFloat(cantidad), unidad, stockMinimo: parseFloat(stockMinimo) } });
-        res.json(item);
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-app.patch('/inventario/:id', async (req, res) => {
-    try {
-        const item = await prisma.inventario.update({ where: { id: parseInt(req.params.id) }, data: { cantidad: parseFloat(req.body.cantidad) } });
-        res.json(item);
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-app.delete('/inventario/:id', async (req, res) => {
-    try { await prisma.inventario.delete({ where: { id: parseInt(req.params.id) } }); res.json({ message: 'Eliminado' }); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
-// --- EGRESOS ---
-app.get('/egresos', async (req, res) => {
-    try { res.json(await prisma.egreso.findMany()); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-app.post('/egresos', async (req, res) => {
-    try {
-        const { fecha, concepto, categoria, montoUSD } = req.body;
-        const egreso = await prisma.egreso.create({ data: { fecha, concepto, categoria, montoUSD: parseFloat(montoUSD) } });
-        res.json(egreso);
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-app.delete('/egresos/:id', async (req, res) => {
-    try { await prisma.egreso.delete({ where: { id: parseInt(req.params.id) } }); res.json({ message: 'Eliminado' }); } catch (error) { res.status(500).json({ error: 'Error' }); }
-});
-
 // --- CAJA DIARIA ---
 app.get('/caja/:fecha', async (req, res) => {
     try {
         const caja = await prisma.cajaDiaria.findUnique({ where: { fecha: req.params.fecha } });
         res.json(caja || { estado: 'No aperturada' });
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
+    } catch (error) { res.status(500).json({ error: 'Error al consultar la caja' }); }
 });
+
 app.post('/caja/abrir', async (req, res) => {
     try {
         const { fecha, montoApertura } = req.body;
-        const nuevaCaja = await prisma.cajaDiaria.create({ data: { fecha, montoApertura: parseFloat(montoApertura), estado: 'Abierta' } });
+        const nuevaCaja = await prisma.cajaDiaria.create({
+            data: { fecha, montoApertura: parseFloat(montoApertura), estado: 'Abierta' }
+        });
         res.json(nuevaCaja);
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
+    } catch (error) { res.status(500).json({ error: 'Error al abrir la caja' }); }
 });
+
 app.put('/caja/cerrar/:id', async (req, res) => {
     try {
         const { ingresosCalculados, egresosCalculados, montoCierreFisico, diferencia } = req.body;
         const cajaCerrada = await prisma.cajaDiaria.update({
             where: { id: parseInt(req.params.id) },
-            data: { ingresosCalculados: parseFloat(ingresosCalculados), egresosCalculados: parseFloat(egresosCalculados), montoCierreFisico: parseFloat(montoCierreFisico), diferencia: parseFloat(diferencia), estado: 'Cerrada' }
+            data: { 
+                ingresosCalculados: parseFloat(ingresosCalculados), 
+                egresosCalculados: parseFloat(egresosCalculados) || 0, // Protegido contra null
+                montoCierreFisico: parseFloat(montoCierreFisico), 
+                diferencia: parseFloat(diferencia), 
+                estado: 'Cerrada' 
+            }
         });
         res.json(cajaCerrada);
-    } catch (error) { res.status(500).json({ error: 'Error' }); }
+    } catch (error) { res.status(500).json({ error: 'Error al cerrar la caja' }); }
 });
+
 app.get('/cajas/historial', async (req, res) => {
-    try { res.json(await prisma.cajaDiaria.findMany({ orderBy: { fecha: 'desc' } })); } catch (error) { res.status(500).json({ error: 'Error' }); }
+    try {
+        res.json(await prisma.cajaDiaria.findMany({ orderBy: { fecha: 'desc' } }));
+    } catch (error) { res.status(500).json({ error: 'Error al obtener historial' }); }
 });
 
 // --- SEGURIDAD ---
@@ -411,7 +367,9 @@ async function crearAdminPorDefecto() {
   try {
     const adminExiste = await prisma.usuario.findUnique({ where: { usuario: "admin" } });
     if (!adminExiste) {
-      await prisma.usuario.create({ data: { nombre: "Alma y Cuerpo", usuario: "admin", password: "admin123", rol: "admin" } });
+      await prisma.usuario.create({
+        data: { nombre: "Alma y Cuerpo", usuario: "admin", password: "admin123", rol: "admin" }
+      });
     }
   } catch (error) {}
 }
@@ -423,20 +381,28 @@ app.post('/login', async (req, res) => {
     const user = await prisma.usuario.findUnique({ where: { usuario: usuario } });
     if (!user || user.password !== password) return res.status(401).json({ error: "Credenciales incorrectas" });
     res.json({ token: "TICKET_ALMA_Y_CUERPO_" + user.id, nombre: user.nombre, rol: user.rol });
-  } catch (error) { res.status(500).json({ error: "Error" }); }
+  } catch (error) { res.status(500).json({ error: "Error al intentar acceder" }); }
 });
+
 app.get('/usuarios', async (req, res) => {
-  try { res.json(await prisma.usuario.findMany({ select: { id: true, nombre: true, usuario: true, rol: true } })); } catch (error) { res.status(500).json({ error: "Error" }); }
+  try {
+    res.json(await prisma.usuario.findMany({ select: { id: true, nombre: true, usuario: true, rol: true } }));
+  } catch (error) { res.status(500).json({ error: "Error al cargar usuarios" }); }
 });
+
 app.post('/usuarios', async (req, res) => {
   try {
     const { nombre, usuario, password, rol } = req.body;
     await prisma.usuario.create({ data: { nombre, usuario, password, rol } });
-    res.json({ mensaje: "Creado" });
-  } catch (error) { res.status(500).json({ error: "Error" }); }
+    res.json({ mensaje: "Usuario Creado" });
+  } catch (error) { res.status(500).json({ error: "Error al crear usuario" }); }
 });
+
 app.delete('/usuarios/:id', async (req, res) => {
-  try { await prisma.usuario.delete({ where: { id: parseInt(req.params.id) } }); res.json({ mensaje: "Eliminado" }); } catch (error) { res.status(500).json({ error: "Error" }); }
+  try {
+    await prisma.usuario.delete({ where: { id: parseInt(req.params.id) } });
+    res.json({ mensaje: "Usuario Eliminado" });
+  } catch (error) { res.status(500).json({ error: "Error al eliminar" }); }
 });
 
 const PUERTO = 3000;
