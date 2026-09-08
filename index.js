@@ -305,6 +305,29 @@ app.put('/paquetes/pagar/:id', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al registrar pago del paquete' }); }
 });
 
+// 🔥 NUEVAS RUTAS DE PAQUETES (AJUSTAR Y ELIMINAR) 🔥
+app.put('/paquetes/:id/ajustar', async (req, res) => {
+    try {
+        const { sesionesUsadas, totalSesiones } = req.body;
+        const paqueteActualizado = await prisma.paquetePaciente.update({
+            where: { id: parseInt(req.params.id) },
+            data: {
+                sesionesUsadas: parseInt(sesionesUsadas),
+                totalSesiones: parseInt(totalSesiones),
+                estadoPaquete: parseInt(sesionesUsadas) >= parseInt(totalSesiones) ? 'Completado' : 'Activo'
+            }
+        });
+        res.json(paqueteActualizado);
+    } catch (error) { res.status(500).json({ error: 'Error al ajustar paquete' }); }
+});
+
+app.delete('/paquetes/:id', async (req, res) => {
+    try {
+        await prisma.paquetePaciente.delete({ where: { id: parseInt(req.params.id) } });
+        res.json({ message: 'Paquete eliminado correctamente' });
+    } catch (error) { res.status(500).json({ error: 'Error al eliminar paquete' }); }
+});
+
 // --- INGRESOS EXTRAS ---
 app.get('/ingresos-extras', async (req, res) => {
     try { res.json(await prisma.ingresoExtra.findMany()); } 
