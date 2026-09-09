@@ -211,8 +211,11 @@ app.put('/paquetes/usar/:id', async (req, res) => {
     try {
         const paquete = await prisma.paquetePaciente.findUnique({ where: { id: parseInt(req.params.id) } });
         if (!paquete || paquete.estadoPaquete === 'Completado') return res.status(400).json({ error: 'Completado' });
+        
         const nuevasSesionesUsadas = paquete.sesionesUsadas + 1;
-        const nuevoEstado = nuevasSesionesUsadas >= paquete.totalSesiones ? 'Completado' : 'Activo';
+        // Mantiene el estado "Acumulador" si lo era, a menos que se complete
+        const nuevoEstado = nuevasSesionesUsadas >= paquete.totalSesiones ? 'Completado' : paquete.estadoPaquete; 
+        
         const paqueteActualizado = await prisma.paquetePaciente.update({ where: { id: parseInt(req.params.id) }, data: { sesionesUsadas: nuevasSesionesUsadas, estadoPaquete: nuevoEstado } });
         res.json(paqueteActualizado);
     } catch (error) { res.status(500).json({ error: 'Error' }); }
@@ -225,9 +228,18 @@ app.put('/paquetes/pagar/:id', async (req, res) => {
 app.put('/paquetes/:id/ajustar', async (req, res) => {
     try {
         const { sesionesUsadas, totalSesiones } = req.body;
+        const paquete = await prisma.paquetePaciente.findUnique({ where: { id: parseInt(req.params.id) } });
+        
+        let nuevoEstado = paquete.estadoPaquete;
+        if (parseInt(sesionesUsadas) >= parseInt(totalSesiones)) {
+            nuevoEstado = 'Completado';
+        } else if (paquete.estadoPaquete === 'Completado') {
+            nuevoEstado = 'Activo'; 
+        }
+
         const paqueteActualizado = await prisma.paquetePaciente.update({
             where: { id: parseInt(req.params.id) },
-            data: { sesionesUsadas: parseInt(sesionesUsadas), totalSesiones: parseInt(totalSesiones), estadoPaquete: parseInt(sesionesUsadas) >= parseInt(totalSesiones) ? 'Completado' : 'Activo' }
+            data: { sesionesUsadas: parseInt(sesionesUsadas), totalSesiones: parseInt(totalSesiones), estadoPaquete: nuevoEstado }
         });
         res.json(paqueteActualizado);
     } catch (error) { res.status(500).json({ error: 'Error al ajustar paquete' }); }
@@ -240,21 +252,24 @@ app.delete('/paquetes/:id', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al eliminar paquete' }); }
 });
 
-// 🔥 NUEVA RUTA PARA CONVERTIR PAQUETE EN ACUMULADOR LIBRE (BORRAR CITAS FUTURAS) 🔥
+// 🔥 RUTA OFICIAL PARA CONVERTIR EN ACUMULADOR LIBRE 🔥
 app.delete('/paquetes/:id/limpiar-agenda', async (req, res) => {
     try {
         const paquete = await prisma.paquetePaciente.findUnique({ where: { id: parseInt(req.params.id) } });
         if (!paquete) return res.status(404).json({ error: 'Paquete no encontrado' });
 
+        // 1. Borramos las citas pendientes en la agenda
         await prisma.cita.deleteMany({
-            where: {
-                clienteId: paquete.clienteId,
-                servicioId: paquete.servicioId,
-                tipo: 'paquete',
-                estado: 'Pendiente'
-            }
+            where: { clienteId: paquete.clienteId, servicioId: paquete.servicioId, tipo: 'paquete', estado: 'Pendiente' }
         });
-        res.json({ message: 'Agenda liberada correctamente' });
+
+        // 2. Cambiamos el estado a "Acumulador" para que cambie la etiqueta visual
+        await prisma.paquetePaciente.update({
+            where: { id: parseInt(req.params.id) },
+            data: { estadoPaquete: 'Acumulador' }
+        });
+
+        res.json({ message: 'Agenda liberada y convertido a acumulador' });
     } catch (error) {
         res.status(500).json({ error: 'Error al limpiar agenda' });
     }
