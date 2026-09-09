@@ -168,7 +168,6 @@ app.put('/citas/:id/estado', async (req, res) => {
   } catch (error) { res.status(500).json({ error: "Fallo al procesar" }); }
 });
 
-// 🔥 RUTA MAESTRA PARA EDITAR CITAS Y PAQUETES 🔥
 app.put('/citas/:id/editar', async (req, res) => {
   try {
     const idCita = parseInt(req.params.id);
@@ -176,57 +175,23 @@ app.put('/citas/:id/editar', async (req, res) => {
     
     const citaVieja = await prisma.cita.findUnique({ where: { id: idCita } });
 
-    // 1. Edita la cita específica en la que se hizo clic
     const citaActualizada = await prisma.cita.update({
       where: { id: idCita },
-      data: { 
-          fecha, 
-          hora, 
-          servicioId: parseInt(servicioId), 
-          sesionActual: sesionActual ? parseInt(sesionActual) : null, 
-          totalSesiones: totalSesiones ? parseInt(totalSesiones) : null, 
-          extras: extras || ''
-      }
+      data: { fecha, hora, servicioId: parseInt(servicioId), sesionActual: sesionActual ? parseInt(sesionActual) : null, totalSesiones: totalSesiones ? parseInt(totalSesiones) : null, extras: extras || '' }
     });
 
-    // 2. Si es paquete y marcaron "Aplicar a todas", actualizamos la base de datos completa
     if (cambiarRestantes && citaActualizada.tipo === 'paquete') {
-      
-      // A) Actualizamos todas las citas pendientes en la agenda
       await prisma.cita.updateMany({
-        where: { 
-            clienteId: citaActualizada.clienteId, 
-            servicioId: citaVieja.servicioId, // Busca por el servicio viejo por si lo cambiaron
-            tipo: 'paquete', 
-            estado: 'Pendiente',
-            id: { not: idCita } 
-        },
-        data: { 
-            hora: hora, 
-            servicioId: parseInt(servicioId),
-            totalSesiones: totalSesiones ? parseInt(totalSesiones) : null,
-            extras: extras || ''
-        } 
+        where: { clienteId: citaActualizada.clienteId, servicioId: citaVieja.servicioId, tipo: 'paquete', estado: 'Pendiente', id: { not: idCita } },
+        data: { hora: hora, servicioId: parseInt(servicioId), totalSesiones: totalSesiones ? parseInt(totalSesiones) : null, extras: extras || '' } 
       });
-
-      // B) Actualizamos el Acumulador (Tarjeta de Paquete) en el Perfil
       await prisma.paquetePaciente.updateMany({
-          where: {
-              clienteId: citaActualizada.clienteId,
-              servicioId: citaVieja.servicioId,
-              estadoPaquete: 'Activo'
-          },
-          data: {
-              servicioId: parseInt(servicioId),
-              totalSesiones: totalSesiones ? parseInt(totalSesiones) : null
-          }
+          where: { clienteId: citaActualizada.clienteId, servicioId: citaVieja.servicioId, estadoPaquete: 'Activo' },
+          data: { servicioId: parseInt(servicioId), totalSesiones: totalSesiones ? parseInt(totalSesiones) : null }
       });
     }
-    
     res.json(citaActualizada);
-  } catch (error) { 
-    res.status(500).json({ error: "Fallo al editar la información" }); 
-  }
+  } catch (error) { res.status(500).json({ error: "Fallo al editar la información" }); }
 });
 
 // --- PAQUETES ---
@@ -273,6 +238,26 @@ app.delete('/paquetes/:id', async (req, res) => {
         await prisma.paquetePaciente.delete({ where: { id: parseInt(req.params.id) } });
         res.json({ message: 'Paquete eliminado correctamente' });
     } catch (error) { res.status(500).json({ error: 'Error al eliminar paquete' }); }
+});
+
+// 🔥 NUEVA RUTA PARA CONVERTIR PAQUETE EN ACUMULADOR LIBRE (BORRAR CITAS FUTURAS) 🔥
+app.delete('/paquetes/:id/limpiar-agenda', async (req, res) => {
+    try {
+        const paquete = await prisma.paquetePaciente.findUnique({ where: { id: parseInt(req.params.id) } });
+        if (!paquete) return res.status(404).json({ error: 'Paquete no encontrado' });
+
+        await prisma.cita.deleteMany({
+            where: {
+                clienteId: paquete.clienteId,
+                servicioId: paquete.servicioId,
+                tipo: 'paquete',
+                estado: 'Pendiente'
+            }
+        });
+        res.json({ message: 'Agenda liberada correctamente' });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al limpiar agenda' });
+    }
 });
 
 // --- INGRESOS EXTRAS ---
