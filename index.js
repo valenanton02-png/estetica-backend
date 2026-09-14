@@ -130,9 +130,32 @@ app.patch('/clientes/:id/descuento', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al actualizar descuento' }); }
 });
 
-// --- RUTAS DE CITAS ---
+// 🔥 OPTIMIZACIÓN 1: RUTAS DE CITAS INTELIGENTES (FILTRADO POR FECHA) 🔥
 app.get('/citas', async (req, res) => {
-  try { res.json(await prisma.cita.findMany({ include: { cliente: true, servicio: true }, orderBy: { hora: 'asc' } })); } catch (error) { res.status(500).json({ error: "Error" }); }
+  try {
+    const { inicio, fin } = req.query;
+    let filtroBusqueda = {};
+
+    // Si la agenda nos envía fechas de inicio y fin, solo buscamos esas.
+    if (inicio && fin) {
+        filtroBusqueda = {
+            fecha: {
+                gte: inicio, // Mayor o igual que la fecha de inicio
+                lte: fin     // Menor o igual que la fecha de fin
+            }
+        };
+    }
+
+    const citasObtenidas = await prisma.cita.findMany({ 
+        where: filtroBusqueda,
+        include: { cliente: true, servicio: true }, 
+        orderBy: { hora: 'asc' } 
+    });
+    
+    res.json(citasObtenidas);
+  } catch (error) { 
+    res.status(500).json({ error: "Error al buscar citas" }); 
+  }
 });
 
 app.post('/citas', async (req, res) => {
@@ -213,7 +236,6 @@ app.put('/paquetes/usar/:id', async (req, res) => {
         if (!paquete || paquete.estadoPaquete === 'Completado') return res.status(400).json({ error: 'Completado' });
         
         const nuevasSesionesUsadas = paquete.sesionesUsadas + 1;
-        // Mantiene el estado "Acumulador" si lo era, a menos que se complete
         const nuevoEstado = nuevasSesionesUsadas >= paquete.totalSesiones ? 'Completado' : paquete.estadoPaquete; 
         
         const paqueteActualizado = await prisma.paquetePaciente.update({ where: { id: parseInt(req.params.id) }, data: { sesionesUsadas: nuevasSesionesUsadas, estadoPaquete: nuevoEstado } });
@@ -252,18 +274,15 @@ app.delete('/paquetes/:id', async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Error al eliminar paquete' }); }
 });
 
-// 🔥 RUTA OFICIAL PARA CONVERTIR EN ACUMULADOR LIBRE 🔥
 app.delete('/paquetes/:id/limpiar-agenda', async (req, res) => {
     try {
         const paquete = await prisma.paquetePaciente.findUnique({ where: { id: parseInt(req.params.id) } });
         if (!paquete) return res.status(404).json({ error: 'Paquete no encontrado' });
 
-        // 1. Borramos las citas pendientes en la agenda
         await prisma.cita.deleteMany({
             where: { clienteId: paquete.clienteId, servicioId: paquete.servicioId, tipo: 'paquete', estado: 'Pendiente' }
         });
 
-        // 2. Cambiamos el estado a "Acumulador" para que cambie la etiqueta visual
         await prisma.paquetePaciente.update({
             where: { id: parseInt(req.params.id) },
             data: { estadoPaquete: 'Acumulador' }
