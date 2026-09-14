@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken'); // 👈 LIBRERÍA DE SEGURIDAD NUEVA
 
 const { Pool } = require('pg');
 const { PrismaPg } = require('@prisma/adapter-pg');
@@ -15,9 +16,77 @@ const prisma = new PrismaClient({ adapter });
 app.use(cors());
 app.use(express.json());
 
+// Clave secreta para firmar los carnets digitales (NUNCA COMPARTIRLA)
+const JWT_SECRET = process.env.JWT_SECRET || 'AlmaCuerpo_Seguridad_Maxima_2026';
+
 app.get('/', (req, res) => {
-  res.send('¡El servidor de la estética está funcionando perfecto y optimizado!');
+  res.send('¡El servidor de la estética está funcionando perfecto, optimizado y BLINDADO!');
 });
+
+// --- RUTA PÚBLICA DE LOGIN (Aquí se fabrica el Carnet Digital) ---
+app.post('/login', async (req, res) => { 
+  try { 
+    const { usuario, password } = req.body; 
+    const user = await prisma.usuario.findUnique({ where: { usuario: usuario } }); 
+    
+    if (!user || user.password !== password) return res.status(401).json({ error: "Incorrectas" }); 
+    
+    // Creamos el Token válido por 24 horas
+    const token = jwt.sign(
+        { id: user.id, rol: user.rol, nombre: user.nombre }, 
+        JWT_SECRET, 
+        { expiresIn: '24h' }
+    );
+    
+    res.json({ token: token, nombre: user.nombre, rol: user.rol }); 
+  } catch (error) { 
+    res.status(500).json({ error: "Error de conexión" }); 
+  }
+});
+
+// 🔥 MIDDLEWARES DE SEGURIDAD (EL POLICÍA DEL SERVIDOR) 🔥
+function verificarToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Formato esperado: "Bearer TOKEN_AQUI"
+    
+    if (!token) return res.status(401).json({ error: "Acceso denegado. No hay credenciales." });
+    
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ error: "Token inválido o expirado. Inicia sesión nuevamente." });
+        req.user = user; // Guardamos los datos del usuario para el control de roles
+        next();
+    });
+}
+
+function controlDeRoles(req, res, next) {
+    const rol = req.user.rol;
+    const metodo = req.method; // GET, POST, PUT, DELETE
+    const ruta = req.path;
+
+    // 1. REGLA VISUALIZADOR: Si el usuario es solo lectura, bloqueamos todo lo que no sea GET (Ver) 🚫
+    if (rol === 'visualizador' || rol === 'lectura') {
+        if (metodo !== 'GET') {
+            return res.status(403).json({ error: "Modo Solo Lectura. No tienes permisos para modificar, borrar o registrar datos." });
+        }
+    }
+
+    // 2. REGLA RECEPCIONISTA: Restricciones específicas 🚫
+    if (rol === 'recepcionista') {
+        if (ruta.startsWith('/usuarios')) {
+            return res.status(403).json({ error: "Solo los administradores pueden gestionar accesos." });
+        }
+        if (ruta.startsWith('/servicios') && metodo !== 'GET') {
+            return res.status(403).json({ error: "No tienes permisos para modificar el catálogo de tratamientos." });
+        }
+    }
+
+    next(); // Si pasa las pruebas, la petición continúa ✅
+}
+
+// APLICAMOS LA SEGURIDAD A TODAS LAS RUTAS PRIVADAS DE ABAJO
+app.use(verificarToken);
+app.use(controlDeRoles);
+
 
 // --- RUTAS DE SERVICIOS ---
 app.get('/servicios', async (req, res) => {
@@ -48,6 +117,17 @@ app.put('/servicios/:id', async (req, res) => {
     });
     res.json(servicioActualizado);
   } catch (error) { res.status(500).json({ error: "Fallo al actualizar el servicio" }); }
+});
+
+// Parche para la nueva función de Promociones de tu catálogo
+app.patch('/servicios/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id); const data = req.body;
+        if(data.precio) data.precio = parseFloat(data.precio);
+        if(data.duracion) data.duracionMin = parseInt(data.duracion);
+        delete data.duracion;
+        res.json(await prisma.servicio.update({ where: { id: id }, data: data }));
+    } catch (error) { res.status(500).json({ error: "Fallo al actualizar promoción" }); }
 });
 
 app.delete('/servicios/:id', async (req, res) => {
@@ -304,14 +384,22 @@ app.post('/caja/abrir', async (req, res) => { try { const { fecha, montoApertura
 app.put('/caja/cerrar/:id', async (req, res) => { try { const { ingresosCalculados, egresosCalculados, montoCierreFisico, diferencia } = req.body; res.json(await prisma.cajaDiaria.update({ where: { id: parseInt(req.params.id) }, data: { ingresosCalculados: parseFloat(ingresosCalculados), egresosCalculados: parseFloat(egresosCalculados) || 0, montoCierreFisico: parseFloat(montoCierreFisico), diferencia: parseFloat(diferencia), estado: 'Cerrada' } })); } catch (error) { res.status(500).json({ error: 'Error' }); }});
 app.get('/cajas/historial', async (req, res) => { try { res.json(await prisma.cajaDiaria.findMany({ orderBy: { fecha: 'desc' } })); } catch (error) { res.status(500).json({ error: 'Error' }); }});
 
-// --- SEGURIDAD ---
+// --- GESTION DE USUARIOS Y ROLES ---
+app.get('/usuarios', async (req, res) => { try { res.json(await prisma.usuario.findMany({ select: { id: true, nombre: true, usuario: true, rol: true } })); } catch (error) { res.status(500).json({ error: "Error al cargar usuarios" }); }});
+app.post('/usuarios', async (req, res) => { 
+    try { 
+        const { nombre, usuario, password, rol } = req.body; 
+        await prisma.usuario.create({ data: { nombre, usuario, password, rol } }); 
+        res.json({ mensaje: "Usuario Creado" }); 
+    } catch (error) { 
+        res.status(500).json({ error: "El nombre de usuario ya existe" }); 
+    }
+});
+app.delete('/usuarios/:id', async (req, res) => { try { await prisma.usuario.delete({ where: { id: parseInt(req.params.id) } }); res.json({ mensaje: "Usuario Eliminado" }); } catch (error) { res.status(500).json({ error: "Error al borrar usuario" }); }});
+
+// Crea el administrador maestro si no existe
 async function crearAdminPorDefecto() { try { const adminExiste = await prisma.usuario.findUnique({ where: { usuario: "admin" } }); if (!adminExiste) { await prisma.usuario.create({ data: { nombre: "Alma y Cuerpo", usuario: "admin", password: "admin123", rol: "admin" } }); } } catch (error) {} }
 crearAdminPorDefecto(); 
 
-app.post('/login', async (req, res) => { try { const { usuario, password } = req.body; const user = await prisma.usuario.findUnique({ where: { usuario: usuario } }); if (!user || user.password !== password) return res.status(401).json({ error: "Incorrectas" }); res.json({ token: "TICKET_ALMA_Y_CUERPO_" + user.id, nombre: user.nombre, rol: user.rol }); } catch (error) { res.status(500).json({ error: "Error" }); }});
-app.get('/usuarios', async (req, res) => { try { res.json(await prisma.usuario.findMany({ select: { id: true, nombre: true, usuario: true, rol: true } })); } catch (error) { res.status(500).json({ error: "Error" }); }});
-app.post('/usuarios', async (req, res) => { try { const { nombre, usuario, password, rol } = req.body; await prisma.usuario.create({ data: { nombre, usuario, password, rol } }); res.json({ mensaje: "Creado" }); } catch (error) { res.status(500).json({ error: "Error" }); }});
-app.delete('/usuarios/:id', async (req, res) => { try { await prisma.usuario.delete({ where: { id: parseInt(req.params.id) } }); res.json({ mensaje: "Eliminado" }); } catch (error) { res.status(500).json({ error: "Error" }); }});
-
-const PUERTO = 3000;
-app.listen(PUERTO, () => { console.log(`Servidor en puerto ${PUERTO}`); });
+const PUERTO = process.env.PORT || 3000;
+app.listen(PUERTO, () => { console.log(`Servidor seguro JWT corriendo en puerto ${PUERTO}`); });
